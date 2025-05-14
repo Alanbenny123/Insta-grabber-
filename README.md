@@ -1,3 +1,3 @@
-# Gram Grabberz Clone
+# Insta
 
-A cloned version of the Instagram Video Downloader web application built with Next.js.
+A  Instagram Video Downloader web application built with Next.js.
