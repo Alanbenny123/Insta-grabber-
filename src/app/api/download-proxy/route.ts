@@ -5,7 +5,6 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const fileUrl = searchParams.get("url");
   const filename = searchParams.get("filename") || "instagram-video.mp4"; // Default filename
-  const quality = searchParams.get("quality") || "high"; // Default to high quality
 
   if (!fileUrl) {
     return NextResponse.json(
