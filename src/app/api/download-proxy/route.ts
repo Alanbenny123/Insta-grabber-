@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const fileUrl = searchParams.get("url");
-  const filename = searchParams.get("filename") || "gram-grabberz-video.mp4"; // Default filename
+  const filename = searchParams.get("filename") || "instagram-video.mp4"; // Default filename
+  const quality = searchParams.get("quality") || "high"; // Default to high quality
 
   if (!fileUrl) {
     return NextResponse.json(
@@ -22,8 +23,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Set up request headers to ensure we get the best quality
+    const headers = new Headers();
+    headers.set(
+      "User-Agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    );
+    headers.set("Accept", "*/*");
+    headers.set("Accept-Encoding", "identity"); // Important for getting uncompressed video
+
     // Fetch the video from the external URL
-    const videoResponse = await fetch(fileUrl);
+    const videoResponse = await fetch(fileUrl, {
+      headers: headers,
+    });
 
     if (!videoResponse.ok) {
       throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
@@ -37,16 +49,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Set headers to force download
-    const headers = new Headers();
-    headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+    const responseHeaders = new Headers();
+    responseHeaders.set(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+
     // Try to get Content-Type from original response, fallback to generic video type
-    headers.set(
+    responseHeaders.set(
       "Content-Type",
       videoResponse.headers.get("Content-Type") || "video/mp4"
     );
+
     // Optionally set Content-Length if available
     if (videoResponse.headers.get("Content-Length")) {
-      headers.set(
+      responseHeaders.set(
         "Content-Length",
         videoResponse.headers.get("Content-Length")!
       );
@@ -55,7 +72,7 @@ export async function GET(request: NextRequest) {
     // Return the stream response
     return new NextResponse(videoStream, {
       status: 200,
-      headers: headers,
+      headers: responseHeaders,
     });
   } catch (error: any) {
     console.error("Download proxy error:", error);

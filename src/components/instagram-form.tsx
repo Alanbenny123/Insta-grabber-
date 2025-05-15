@@ -22,7 +22,12 @@ import { Button } from "@/components/ui/button";
 
 import { Download, Loader2, X } from "lucide-react";
 
-import { cn, getPostShortcode, isShortcodePresent } from "@/lib/utils";
+import {
+  cn,
+  getPostShortcode,
+  isShortcodePresent,
+  getHighestQualityVideoUrl,
+} from "@/lib/utils";
 import { useGetInstagramPostMutation } from "@/features/react-query/mutations/instagram";
 import { HTTP_CODE_ENUM } from "@/features/api/http-codes";
 
@@ -55,12 +60,15 @@ const useFormSchema = () => {
   });
 };
 
-function triggerDownload(videoUrl: string) {
+function triggerDownload(videoUrl: string, username?: string) {
   // Ensure we are in a browser environment
   if (typeof window === "undefined") return;
 
   const randomTime = new Date().getTime().toString().slice(-8);
-  const filename = `gram-grabberz-${randomTime}.mp-4`;
+  // Use username in filename if available
+  const filename = username
+    ? `instagram-${username}-${randomTime}.mp4`
+    : `gram-grabberz-${randomTime}.mp4`;
 
   // Construct the URL to your proxy API route
   const proxyUrl = new URL("/api/download-proxy", window.location.origin); // Use relative path + origin
@@ -95,6 +103,8 @@ type CachedUrl = {
   invalid?: {
     messageKey: string;
   };
+  username?: string;
+  dashManifest?: string;
 };
 
 export function InstagramForm(props: { className?: string }) {
@@ -132,12 +142,16 @@ export function InstagramForm(props: { className?: string }) {
   function setCachedUrl(
     shortcode: string,
     videoUrl?: string,
-    invalid?: CachedUrl["invalid"]
+    invalid?: CachedUrl["invalid"],
+    username?: string,
+    dashManifest?: string
   ) {
     cachedUrls.current?.set(shortcode, {
       videoUrl,
       expiresAt: Date.now() + CACHE_TIME,
       invalid,
+      username,
+      dashManifest,
     });
   }
 
@@ -175,7 +189,22 @@ export function InstagramForm(props: { className?: string }) {
     }
 
     if (cachedUrl?.videoUrl) {
-      triggerDownload(cachedUrl.videoUrl);
+      // If we have a dash manifest in cache, try to get high quality URL
+      if (cachedUrl.dashManifest) {
+        try {
+          const highQualityUrl = await getHighestQualityVideoUrl(
+            cachedUrl.dashManifest
+          );
+          if (highQualityUrl) {
+            triggerDownload(highQualityUrl, cachedUrl.username);
+            return;
+          }
+        } catch (error) {
+          console.error("Error getting high quality URL:", error);
+        }
+      }
+      // Fall back to regular URL if needed
+      triggerDownload(cachedUrl.videoUrl, cachedUrl.username);
       return;
     }
 
@@ -184,9 +213,33 @@ export function InstagramForm(props: { className?: string }) {
 
       if (status === HTTP_CODE_ENUM.OK) {
         const downloadUrl = data.data.xdt_shortcode_media.video_url;
-        if (downloadUrl) {
-          triggerDownload(downloadUrl);
-          setCachedUrl(shortcode, downloadUrl);
+        const username = data.data.xdt_shortcode_media.owner.username;
+        const dashInfo = data.data.xdt_shortcode_media.dash_info;
+        const dashManifest = dashInfo?.video_dash_manifest;
+
+        let highQualityUrl = downloadUrl;
+
+        // Try to get a higher quality URL from the DASH manifest
+        if (dashManifest && dashInfo?.is_dash_eligible) {
+          try {
+            const bestUrl = await getHighestQualityVideoUrl(dashManifest);
+            if (bestUrl) {
+              highQualityUrl = bestUrl;
+            }
+          } catch (error) {
+            console.error("Error parsing DASH manifest:", error);
+          }
+        }
+
+        if (highQualityUrl) {
+          triggerDownload(highQualityUrl, username);
+          setCachedUrl(
+            shortcode,
+            downloadUrl,
+            undefined,
+            username,
+            dashManifest
+          );
           toast.success(t("toasts.success"), {
             id: "toast-success",
             position: "top-center",

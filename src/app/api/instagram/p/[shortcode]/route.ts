@@ -43,7 +43,20 @@ export async function GET(_: NextRequest, context: RouteContext) {
         );
       }
 
-      return NextResponse.json({ data }, { status: 200 });
+      // Ensuring we send the dash_info for higher quality videos
+      const responseData = {
+        data: {
+          xdt_shortcode_media: {
+            video_url: data.xdt_shortcode_media.video_url,
+            dash_info: data.xdt_shortcode_media.dash_info,
+            owner: data.xdt_shortcode_media.owner,
+            is_video: data.xdt_shortcode_media.is_video,
+            dimensions: data.xdt_shortcode_media.dimensions,
+          },
+        },
+      };
+
+      return NextResponse.json(responseData, { status: 200 });
     }
 
     if (status === 404) {

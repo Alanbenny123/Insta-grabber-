@@ -2,14 +2,14 @@ import { Metadata } from "next";
 
 export const siteConfig = {
   name: "Instagram Grabber",
-  domain: "localhost:3000",
-  shortName: "Instagram Grabber",
+  domain: "insta-grabber-black.vercel.app",
+  shortName: "InstaGrabber",
   creator: "macri",
   description:
     "Fast, free, and no login required. Just paste the URL and download.",
   ogDescription:
     "Fast, free, and no login required. Just paste the URL and download.",
-  url: "http://localhost:3000",
+  url: "https://insta-grabber-black.vercel.app",
 };
 
 export const siteMetadata: Metadata = {
