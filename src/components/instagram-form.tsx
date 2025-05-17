@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -34,6 +34,16 @@ import { HTTP_CODE_ENUM } from "@/features/api/http-codes";
 // 5 minutes
 const CACHE_TIME = 5 * 60 * 1000;
 
+type CachedUrl = {
+  videoUrl?: string;
+  expiresAt: number;
+  invalid?: {
+    messageKey: string;
+  };
+  username?: string;
+  dashManifest?: string;
+};
+
 const FormValidations = {
   url: {
     REGEX: /^(https?:\/\/)?(www\.)?instagram\.com\/(p|reel)\/.+$/,
@@ -60,56 +70,12 @@ const useFormSchema = () => {
   });
 };
 
-function triggerDownload(videoUrl: string, username?: string) {
-  // Ensure we are in a browser environment
-  if (typeof window === "undefined") return;
-
-  const randomTime = new Date().getTime().toString().slice(-8);
-  // Use username in filename if available
-  const filename = username
-    ? `instagram-${username}-${randomTime}.mp4`
-    : `gram-grabberz-${randomTime}.mp4`;
-
-  // Construct the URL to your proxy API route
-  const proxyUrl = new URL("/api/download-proxy", window.location.origin); // Use relative path + origin
-  proxyUrl.searchParams.append("url", videoUrl);
-  proxyUrl.searchParams.append("filename", filename);
-
-  console.log("Using proxy URL:", proxyUrl.toString()); // For debugging
-
-  const link = document.createElement("a");
-  // Set href to your proxy route
-  link.href = proxyUrl.toString();
-  link.target = "_blank";
-
-  // The 'download' attribute here is less critical because the proxy
-  // sets the Content-Disposition header, but it can still be helpful
-  // as a fallback or hint for the browser. Keep the desired filename.
-  link.setAttribute("download", filename);
-
-  // Append link to the body temporarily
-  document.body.appendChild(link);
-
-  // Programmatically click the link to trigger the download
-  link.click();
-
-  // Clean up and remove the link
-  document.body.removeChild(link);
-}
-
-type CachedUrl = {
-  videoUrl?: string;
-  expiresAt: number;
-  invalid?: {
-    messageKey: string;
-  };
-  username?: string;
-  dashManifest?: string;
-};
-
 export function InstagramForm(props: { className?: string }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const cachedUrls = React.useRef(new Map<string, CachedUrl>());
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [lastDownloadedUrl, setLastDownloadedUrl] = useState<string>("");
 
   const t = useTranslations("components.instagramForm");
 
@@ -277,6 +243,67 @@ export function InstagramForm(props: { className?: string }) {
     }
   }
 
+  function triggerDownload(videoUrl: string, username?: string) {
+    if (typeof window === "undefined") return;
+
+    // Check if this is the same URL as last download
+    if (videoUrl === lastDownloadedUrl) {
+      const shouldRedownload = window.confirm(
+        "You've already downloaded this reel. Do you want to download it again?"
+      );
+      if (!shouldRedownload) return;
+    }
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    setLastDownloadedUrl(videoUrl);
+
+    const randomTime = new Date().getTime().toString().slice(-8);
+    const filename = username
+      ? `instagram-${username}-${randomTime}.mp4`
+      : `gram-grabberz-${randomTime}.mp4`;
+
+    const proxyUrl = new URL("/api/download-proxy", window.location.origin);
+    proxyUrl.searchParams.append("url", videoUrl);
+    proxyUrl.searchParams.append("filename", filename);
+
+    // Use XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", proxyUrl.toString(), true);
+    xhr.responseType = "blob";
+
+    xhr.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const progress = Math.round((event.loaded / event.total) * 100);
+        setDownloadProgress(progress);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const blob = xhr.response;
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    };
+
+    xhr.onerror = () => {
+      console.error("Download failed");
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    };
+
+    xhr.send();
+  }
+
   React.useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -342,6 +369,19 @@ export function InstagramForm(props: { className?: string }) {
         </form>
       </Form>
       <p className="text-muted-foreground text-center text-xs">{t("hint")}</p>
+      {isDownloading && (
+        <div className="mt-2">
+          <div className="h-2.5 w-full rounded-full bg-gray-200">
+            <div
+              className="h-2.5 rounded-full bg-blue-600 transition-all duration-300"
+              style={{ width: `${downloadProgress}%` }}
+            ></div>
+          </div>
+          <p className="mt-1 text-sm text-gray-600">
+            {downloadProgress}% downloaded
+          </p>
+        </div>
+      )}
     </div>
   );
 }
