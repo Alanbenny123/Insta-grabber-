@@ -1,5 +1,5 @@
 import React from "react";
-
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 export function Footer() {
@@ -14,24 +14,24 @@ export function Footer() {
           {t("copyright", { year })}
         </p>
         <div className="flex gap-4">
-          <a
-            href="#"
+          <Link
+            href="/terms"
             className="text-muted-foreground text-sm hover:text-teal-500"
           >
             {t("links.terms")}
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            href="/privacy"
             className="text-muted-foreground text-sm hover:text-teal-500"
           >
             {t("links.privacy")}
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            href="/contact"
             className="text-muted-foreground text-sm hover:text-teal-500"
           >
             {t("links.contact")}
-          </a>
+          </Link>
         </div>
       </div>
     </footer>

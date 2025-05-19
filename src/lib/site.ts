@@ -46,5 +46,5 @@ export const siteMetadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
   },
-  manifest: "/webmanifest.json",
+  manifest: "/web.manifest.json",
 };
