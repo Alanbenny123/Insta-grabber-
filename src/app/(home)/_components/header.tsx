@@ -58,7 +58,9 @@ export function Header() {
             rel="noopener noreferrer"
             className="text-sm font-medium transition-colors hover:text-teal-500"
           >
-            Video Upscaler
+            Video
+            <br />
+            Upscaler
           </a>
           <a
             href={homeLinks.features}
@@ -70,7 +72,9 @@ export function Header() {
             href={homeLinks.howItWorks}
             className="text-sm font-medium transition-colors hover:text-teal-500"
           >
-            {t("links.howItWorks")}
+            How It
+            <br />
+            Works
           </a>
           <a
             href={homeLinks.frequentlyAsked}
@@ -115,7 +119,9 @@ export function Header() {
                     className="px-2 py-2 text-lg font-medium transition-colors hover:text-teal-500"
                     onClick={() => setOpen(false)}
                   >
-                    Video Upscaler
+                    Video
+                    <br />
+                    Upscaler
                   </a>
                   <a
                     href={homeLinks.features}
@@ -129,7 +135,9 @@ export function Header() {
                     className="px-2 py-2 text-lg font-medium transition-colors hover:text-teal-500"
                     onClick={() => setOpen(false)}
                   >
-                    {t("links.howItWorks")}
+                    How It
+                    <br />
+                    Works
                   </a>
                   <a
                     href={homeLinks.frequentlyAsked}
