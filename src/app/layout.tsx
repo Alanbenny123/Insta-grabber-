@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans as RootFont } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/features/theme/theme-provider";
@@ -37,6 +38,7 @@ export default async function RootLayout({
               {children}
               <Toaster closeButton />
               <Analytics />
+              <SpeedInsights />
             </ReactQueryProvider>
           </ThemeProvider>
         </LocaleProvider>
