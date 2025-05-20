@@ -21,7 +21,7 @@
         "success": "Video download is starting...",
         "error": "Something went wrong, please try again."
       },
-      "hint": "Works with Instagram posts and reels",
+      "hint": "Works with Instagram reels",
       "submit": "Download"
     }
   },

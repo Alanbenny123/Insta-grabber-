@@ -53,6 +53,14 @@ export function Header() {
         {/* Desktop Navigation */}
         <nav className="ml-auto hidden items-center gap-6 md:flex">
           <a
+            href="https://video-upscaler.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium transition-colors hover:text-teal-500"
+          >
+            Video Upscaler
+          </a>
+          <a
             href={homeLinks.features}
             className="text-sm font-medium transition-colors hover:text-teal-500"
           >
@@ -101,13 +109,21 @@ export function Header() {
               <div className="flex h-full flex-col">
                 <nav className="flex flex-col gap-4 px-4">
                   <a
+                    href="https://video-upscaler.vercel.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-2 text-lg font-medium transition-colors hover:text-teal-500"
+                    onClick={() => setOpen(false)}
+                  >
+                    Video Upscaler
+                  </a>
+                  <a
                     href={homeLinks.features}
                     className="px-2 py-2 text-lg font-medium transition-colors hover:text-teal-500"
                     onClick={() => setOpen(false)}
                   >
                     {t("links.features")}
                   </a>
-
                   <a
                     href={homeLinks.howItWorks}
                     className="px-2 py-2 text-lg font-medium transition-colors hover:text-teal-500"
