@@ -41,14 +41,14 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 dark:bg-gray-900/80">
       <div className="container mx-auto flex h-16 items-center px-4">
-        <div
-          role="button"
+        <button
+          type="button"
           onClick={scrollUp}
-          className="flex cursor-pointer items-center gap-2"
+          className="flex cursor-pointer items-center gap-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500"
         >
           <LogoImage className="h-6 w-6 text-teal-500" />
           <LogoText />
-        </div>
+        </button>
 
         {/* Desktop Navigation */}
         <nav className="ml-auto hidden items-center gap-6 md:flex">

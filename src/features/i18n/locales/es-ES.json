@@ -139,11 +139,11 @@
             "title": "Preguntas Técnicas",
             "q1": {
               "trigger": "¿Qué tipos de contenido de Instagram puedo descargar?",
-              "content": "Puedes descargar publicaciones regulares, Reels e historias que contengan videos. Nuestro servicio funciona con cuentas públicas de Instagram y la mayoría de las cuentas privadas a las que tienes acceso."
+              "content": "Puedes descargar videos de publicaciones y Reels públicos de Instagram. Las historias y las publicaciones privadas no son compatibles."
             },
             "q2": {
               "trigger": "¿Cuál es la calidad del video?",
-              "content": "Proporcionamos la versión de la más alta calidad del video que Instagram pone a disposición, generalmente en calidad HD (1080p) cuando está disponible desde la fuente."
+              "content": "El archivo descargado utiliza la URL de video que proporciona Instagram. La calidad depende de la publicación original y puede variar."
             },
             "q3": {
               "trigger": "¿Funciona en dispositivos móviles?",

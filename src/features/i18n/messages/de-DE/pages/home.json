@@ -90,11 +90,11 @@
         "title": "Technische Fragen",
         "q1": {
           "trigger": "Welche Arten von Instagram-Inhalten kann ich herunterladen?",
-          "content": "Sie können normale Posts, Reels und Stories herunterladen, die Videos enthalten. Unser Service funktioniert mit öffentlichen Instagram-Konten und den meisten privaten Konten, auf die Sie Zugriff haben."
+          "content": "Sie können Videos aus öffentlichen Instagram-Beiträgen und Reels herunterladen. Stories und private Beiträge werden nicht unterstützt."
         },
         "q2": {
           "trigger": "Wie ist die Videoqualität?",
-          "content": "Wir bieten die hochwertigste Version des Videos an, die Instagram zur Verfügung stellt, in der Regel in HD-Qualität (1080p), wenn sie von der Quelle verfügbar ist."
+          "content": "Die heruntergeladene Datei verwendet die von Instagram bereitgestellte Video-URL. Die Qualität hängt vom ursprünglichen Beitrag ab und kann variieren."
         },
         "q3": {
           "trigger": "Funktioniert es auf Mobilgeräten?",

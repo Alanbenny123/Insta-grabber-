@@ -42,12 +42,6 @@ type CachedUrl = {
   username?: string;
 };
 
-const FormValidations = {
-  url: {
-    REGEX: /^(https?:\/\/)?(www\.)?instagram\.com\/(p|reel)\/.+$/,
-  },
-};
-
 const useFormSchema = () => {
   const t = useTranslations("components.instagramForm.inputs");
 
@@ -58,7 +52,6 @@ const useFormSchema = () => {
       .min(1, {
         message: t("url.validation.required"),
       })
-      .regex(FormValidations.url.REGEX, t("url.validation.invalid"))
       .refine(
         (value) => {
           return isShortcodePresent(value);

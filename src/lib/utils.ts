@@ -6,24 +6,29 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function isShortcodePresent(url: string) {
-  const regex = /\/(p|reel)\/([a-zA-Z0-9_-]+)\/?/;
-  const match = url.match(regex);
-
-  if (match && match[2]) {
-    return true;
-  }
-
-  return false;
+  return getPostShortcode(url) !== null;
 }
 
 export function getPostShortcode(url: string): string | null {
-  // Regex to extract the shortcode from both /p/ and /reel/ URLs
-  const regex = /\/(p|reel)\/([a-zA-Z0-9_-]+)(?:\/|\?|$)/i;
-  const match = url.match(regex);
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "https:" ||
+      !["instagram.com", "www.instagram.com", "m.instagram.com"].includes(
+        parsed.hostname.toLowerCase()
+      ) ||
+      parsed.port ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
 
-  if (match && match[2]) {
-    return match[2];
+    const match = parsed.pathname.match(
+      /^\/(?:p|reel)\/([a-zA-Z0-9_-]{1,64})\/?$/
+    );
+    return match?.[1] ?? null;
+  } catch {
+    return null;
   }
-
-  return null;
 }
