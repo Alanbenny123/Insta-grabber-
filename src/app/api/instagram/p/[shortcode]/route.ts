@@ -1,87 +1,93 @@
 import { NextRequest, NextResponse } from "next/server";
-
-import { IG_GraphQLResponseDto } from "@/features/api/_dto/instagram";
-
 import { getInstagramPostGraphQL } from "./utils";
 
 interface RouteContext {
-  params: Promise<{
-    shortcode: string;
-  }>;
+  params: Promise<{ shortcode: string }>;
 }
+
+type UpstreamMedia = {
+  is_video?: boolean;
+  video_url?: string;
+  owner?: { username?: string };
+};
 
 export async function GET(_: NextRequest, context: RouteContext) {
   const { shortcode } = await context.params;
-
-  if (!shortcode) {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(shortcode || "")) {
     return NextResponse.json(
-      { error: "noShortcode", message: "shortcode is required" },
+      { error: "noShortcode", message: "A valid shortcode is required" },
       { status: 400 }
     );
   }
 
   try {
-    const response = await getInstagramPostGraphQL({
-      shortcode,
-    });
+    const response = await getInstagramPostGraphQL({ shortcode });
 
-    const status = response.status;
-
-    if (status === 200) {
-      const { data } = (await response.json()) as IG_GraphQLResponseDto;
-      if (!data.xdt_shortcode_media) {
-        return NextResponse.json(
-          { error: "notFound", message: "post not found" },
-          { status: 404 }
-        );
-      }
-
-      if (!data.xdt_shortcode_media.is_video) {
-        return NextResponse.json(
-          { error: "notVideo", message: "post is not a video" },
-          { status: 400 }
-        );
-      }
-
-      // Ensuring we send the dash_info for higher quality videos
-      const responseData = {
-        data: {
-          xdt_shortcode_media: {
-            video_url: data.xdt_shortcode_media.video_url,
-            dash_info: data.xdt_shortcode_media.dash_info,
-            owner: data.xdt_shortcode_media.owner,
-            is_video: data.xdt_shortcode_media.is_video,
-            dimensions: data.xdt_shortcode_media.dimensions,
-          },
-        },
-      };
-
-      return NextResponse.json(responseData, { status: 200 });
-    }
-
-    if (status === 404) {
+    if (response.status === 404) {
       return NextResponse.json(
-        { error: "notFound", message: "post not found" },
+        { error: "notFound", message: "Post not found" },
         { status: 404 }
       );
     }
-
-    if (status === 429 || status === 401) {
+    if (response.status === 429) {
       return NextResponse.json(
-        {
-          error: "tooManyRequests",
-          message: "too many requests, try again later",
-        },
+        { error: "tooManyRequests", message: "Try again later" },
         { status: 429 }
       );
     }
+    if (!response.ok) {
+      console.error("Instagram metadata request failed:", response.status);
+      return NextResponse.json(
+        { error: "serverError", message: "Instagram metadata is unavailable" },
+        { status: 502 }
+      );
+    }
 
-    throw new Error("Failed to fetch post data");
-  } catch (error: any) {
-    console.error(error);
+    const payload = (await response.json()) as {
+      data?: { xdt_shortcode_media?: UpstreamMedia | null };
+    };
+    if (!payload?.data || !("xdt_shortcode_media" in payload.data)) {
+      console.error("Instagram metadata response has an unexpected shape");
+      return NextResponse.json(
+        { error: "serverError", message: "Instagram metadata is unavailable" },
+        { status: 502 }
+      );
+    }
+
+    const media = payload.data.xdt_shortcode_media;
+    if (!media) {
+      return NextResponse.json(
+        { error: "notFound", message: "Post not found" },
+        { status: 404 }
+      );
+    }
+    if (media.is_video === false) {
+      return NextResponse.json(
+        { error: "notVideo", message: "Post is not a video" },
+        { status: 400 }
+      );
+    }
+    if (media.is_video !== true || !media.video_url || !media.owner?.username) {
+      console.error("Instagram video metadata is incomplete");
+      return NextResponse.json(
+        { error: "serverError", message: "Instagram metadata is unavailable" },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      data: {
+        xdt_shortcode_media: {
+          video_url: media.video_url,
+          owner: { username: media.owner.username },
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Instagram metadata request failed:", error);
     return NextResponse.json(
-      { error: "serverError", message: error.message },
-      { status: 500 }
+      { error: "serverError", message: "Instagram metadata is unavailable" },
+      { status: 502 }
     );
   }
 }

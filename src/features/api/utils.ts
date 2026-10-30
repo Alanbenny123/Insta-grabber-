@@ -7,20 +7,16 @@ type FetchJsonResponse<T> =
       data: undefined;
     }
   | {
-      status: HTTP_CODE_ENUM.SERVICE_UNAVAILABLE;
-      data: undefined;
-    }
-  | {
       status:
         | HTTP_CODE_ENUM.NOT_FOUND
         | HTTP_CODE_ENUM.BAD_REQUEST
         | HTTP_CODE_ENUM.TOO_MANY_REQUESTS
         | HTTP_CODE_ENUM.UNPROCESSABLE_ENTITY
+        | HTTP_CODE_ENUM.BAD_GATEWAY
         | HTTP_CODE_ENUM.INTERNAL_SERVER_ERROR;
       data: {
         error: string;
         message: string;
-        statusCode: HTTP_CODE_ENUM.TOO_MANY_REQUESTS;
       };
     };
 

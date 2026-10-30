@@ -26,7 +26,6 @@ import {
   cn,
   getPostShortcode,
   isShortcodePresent,
-  getHighestQualityVideoUrl,
 } from "@/lib/utils";
 import { useGetInstagramPostMutation } from "@/features/react-query/mutations/instagram";
 import { HTTP_CODE_ENUM } from "@/features/api/http-codes";
@@ -41,7 +40,6 @@ type CachedUrl = {
     messageKey: string;
   };
   username?: string;
-  dashManifest?: string;
 };
 
 const FormValidations = {
@@ -96,7 +94,7 @@ export function InstagramForm(props: { className?: string }) {
 
   const errorMessage = form.formState.errors.url?.message;
 
-  const isDisabled = isPending || !form.formState.isDirty;
+  const isDisabled = isPending || isDownloading || !form.formState.isDirty;
   const isShowClearButton = form.watch("url").length > 0;
 
   function clearUrlField() {
@@ -109,15 +107,13 @@ export function InstagramForm(props: { className?: string }) {
     shortcode: string,
     videoUrl?: string,
     invalid?: CachedUrl["invalid"],
-    username?: string,
-    dashManifest?: string
+    username?: string
   ) {
     cachedUrls.current?.set(shortcode, {
       videoUrl,
       expiresAt: Date.now() + CACHE_TIME,
       invalid,
       username,
-      dashManifest,
     });
   }
 
@@ -155,22 +151,7 @@ export function InstagramForm(props: { className?: string }) {
     }
 
     if (cachedUrl?.videoUrl) {
-      // If we have a dash manifest in cache, try to get high quality URL
-      if (cachedUrl.dashManifest) {
-        try {
-          const highQualityUrl = await getHighestQualityVideoUrl(
-            cachedUrl.dashManifest
-          );
-          if (highQualityUrl) {
-            triggerDownload(highQualityUrl, cachedUrl.username);
-            return;
-          }
-        } catch (error) {
-          console.error("Error getting high quality URL:", error);
-        }
-      }
-      // Fall back to regular URL if needed
-      triggerDownload(cachedUrl.videoUrl, cachedUrl.username);
+      triggerDownload(cachedUrl.videoUrl, cachedUrl.username, shortcode);
       return;
     }
 
@@ -180,37 +161,10 @@ export function InstagramForm(props: { className?: string }) {
       if (status === HTTP_CODE_ENUM.OK) {
         const downloadUrl = data.data.xdt_shortcode_media.video_url;
         const username = data.data.xdt_shortcode_media.owner.username;
-        const dashInfo = data.data.xdt_shortcode_media.dash_info;
-        const dashManifest = dashInfo?.video_dash_manifest;
 
-        let highQualityUrl = downloadUrl;
-
-        // Try to get a higher quality URL from the DASH manifest
-        if (dashManifest && dashInfo?.is_dash_eligible) {
-          try {
-            const bestUrl = await getHighestQualityVideoUrl(dashManifest);
-            if (bestUrl) {
-              highQualityUrl = bestUrl;
-            }
-          } catch (error) {
-            console.error("Error parsing DASH manifest:", error);
-          }
-        }
-
-        if (highQualityUrl) {
-          triggerDownload(highQualityUrl, username);
-          setCachedUrl(
-            shortcode,
-            downloadUrl,
-            undefined,
-            username,
-            dashManifest
-          );
-          toast.success(t("toasts.success"), {
-            id: "toast-success",
-            position: "top-center",
-            duration: 1500,
-          });
+        if (downloadUrl) {
+          setCachedUrl(shortcode, downloadUrl, undefined, username);
+          triggerDownload(downloadUrl, username, shortcode);
         } else {
           throw new Error("Video URL not found");
         }
@@ -218,6 +172,7 @@ export function InstagramForm(props: { className?: string }) {
         status === HTTP_CODE_ENUM.NOT_FOUND ||
         status === HTTP_CODE_ENUM.BAD_REQUEST ||
         status === HTTP_CODE_ENUM.TOO_MANY_REQUESTS ||
+        status === HTTP_CODE_ENUM.BAD_GATEWAY ||
         status === HTTP_CODE_ENUM.INTERNAL_SERVER_ERROR
       ) {
         const errorMessageKey = `serverErrors.${data.error}`;
@@ -243,7 +198,11 @@ export function InstagramForm(props: { className?: string }) {
     }
   }
 
-  function triggerDownload(videoUrl: string, username?: string) {
+  function triggerDownload(
+    videoUrl: string,
+    username?: string,
+    shortcode?: string
+  ) {
     if (typeof window === "undefined") return;
 
     // Check if this is the same URL as last download
@@ -256,7 +215,6 @@ export function InstagramForm(props: { className?: string }) {
 
     setIsDownloading(true);
     setDownloadProgress(0);
-    setLastDownloadedUrl(videoUrl);
 
     const randomTime = new Date().getTime().toString().slice(-8);
     const filename = username
@@ -271,6 +229,16 @@ export function InstagramForm(props: { className?: string }) {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", proxyUrl.toString(), true);
     xhr.responseType = "blob";
+    xhr.timeout = 70_000;
+
+    const showDownloadError = () => {
+      if (shortcode) cachedUrls.current.delete(shortcode);
+      toast.error(t("toasts.error"), {
+        dismissible: true,
+        id: "toast-error",
+        position: "top-center",
+      });
+    };
 
     xhr.onprogress = (event) => {
       if (event.lengthComputable) {
@@ -280,28 +248,59 @@ export function InstagramForm(props: { className?: string }) {
     };
 
     xhr.onload = () => {
-      if (xhr.status === 200) {
-        const blob = xhr.response;
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
+      if (xhr.status !== 200 || !(xhr.response instanceof Blob)) {
+        showDownloadError();
+        return;
+      }
+
+      let objectUrl: string | undefined;
+      let link: HTMLAnchorElement | undefined;
+      try {
+        objectUrl = window.URL.createObjectURL(xhr.response);
+        link = document.createElement("a");
+        link.href = objectUrl;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        setLastDownloadedUrl(videoUrl);
+        toast.success(t("toasts.success"), {
+          id: "toast-success",
+          position: "top-center",
+          duration: 1500,
+        });
+      } catch (error) {
+        console.error("Download failed:", error);
+        showDownloadError();
+      } finally {
+        link?.remove();
+        const urlToRevoke = objectUrl;
+        if (urlToRevoke) {
+          window.setTimeout(() => window.URL.revokeObjectURL(urlToRevoke), 1000);
+        }
       }
+    };
+
+    xhr.onloadend = () => {
       setIsDownloading(false);
       setDownloadProgress(0);
     };
 
     xhr.onerror = () => {
       console.error("Download failed");
-      setIsDownloading(false);
-      setDownloadProgress(0);
+      showDownloadError();
     };
 
-    xhr.send();
+    xhr.ontimeout = showDownloadError;
+    xhr.onabort = showDownloadError;
+
+    try {
+      xhr.send();
+    } catch (error) {
+      console.error("Download failed:", error);
+      showDownloadError();
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
   }
 
   React.useEffect(() => {
@@ -341,6 +340,7 @@ export function InstagramForm(props: { className?: string }) {
                     />
                     {isShowClearButton && (
                       <Button
+                        type="button"
                         size="icon"
                         variant="ghost"
                         onClick={clearUrlField}

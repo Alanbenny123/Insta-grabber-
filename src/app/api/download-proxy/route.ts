@@ -1,83 +1,117 @@
-// app/api/download-proxy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const fileUrl = searchParams.get("url");
-  const filename = searchParams.get("filename") || "instagram-video.mp4"; // Default filename
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
+const DOWNLOAD_TIMEOUT_MS = 60_000;
 
-  if (!fileUrl) {
+function isAllowedMediaUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+
+    return (
+      url.protocol === "https:" &&
+      (url.port === "" || url.port === "443") &&
+      !url.username &&
+      !url.password &&
+      (hostname.endsWith(".cdninstagram.com") ||
+        hostname.endsWith(".fbcdn.net"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function safeFilename(value: string | null): string {
+  const name = (value || "instagram-video.mp4")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(0, 120);
+  return name.endsWith(".mp4") ? name : "instagram-video.mp4";
+}
+
+export async function GET(request: NextRequest) {
+  const fileUrl = request.nextUrl.searchParams.get("url");
+  if (!fileUrl || !isAllowedMediaUrl(fileUrl)) {
     return NextResponse.json(
-      { error: "missingUrl", message: "url is required" },
+      { error: "invalidUrl", message: "A valid Instagram media URL is required" },
       { status: 400 }
     );
   }
 
+  const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
+
   try {
-    // Validate the URL slightly (optional but recommended)
-    if (!fileUrl.startsWith("https://")) {
-      return NextResponse.json(
-        { error: "Invalid URL format" },
-        { status: 400 }
-      );
+    let url = fileUrl;
+    let videoResponse: Response | undefined;
+
+    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+      videoResponse = await fetch(url, {
+        headers: { Accept: "video/mp4,video/*;q=0.9,*/*;q=0.1" },
+        redirect: "manual",
+        signal,
+        cache: "no-store",
+      });
+
+      if (![301, 302, 303, 307, 308].includes(videoResponse.status)) break;
+
+      const location = videoResponse.headers.get("location");
+      if (!location) {
+        return NextResponse.json({ error: "upstreamError" }, { status: 502 });
+      }
+
+      const nextUrl = new URL(location, url).toString();
+      if (!isAllowedMediaUrl(nextUrl) || redirects === MAX_REDIRECTS) {
+        return NextResponse.json({ error: "invalidRedirect" }, { status: 502 });
+      }
+      await videoResponse.body?.cancel();
+      url = nextUrl;
     }
 
-    // Set up request headers to ensure we get the best quality
-    const headers = new Headers();
-    headers.set(
-      "User-Agent",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    );
-    headers.set("Accept", "*/*");
-    headers.set("Accept-Encoding", "identity"); // Important for getting uncompressed video
+    if (!videoResponse?.ok || !videoResponse.body) {
+      return NextResponse.json({ error: "upstreamError" }, { status: 502 });
+    }
 
-    // Fetch the video from the external URL
-    const videoResponse = await fetch(fileUrl, {
-      headers: headers,
+    const contentType = videoResponse.headers.get("content-type")?.toLowerCase() || "";
+    if (
+      !contentType.startsWith("video/") &&
+      !contentType.startsWith("application/octet-stream") &&
+      !contentType.startsWith("binary/octet-stream")
+    ) {
+      await videoResponse.body.cancel();
+      return NextResponse.json({ error: "invalidMedia" }, { status: 502 });
+    }
+
+    const contentLength = Number(videoResponse.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_VIDEO_BYTES) {
+      await videoResponse.body.cancel();
+      return NextResponse.json({ error: "mediaTooLarge" }, { status: 413 });
+    }
+
+    let receivedBytes = 0;
+    const limitedStream = videoResponse.body.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          receivedBytes += chunk.byteLength;
+          if (receivedBytes > MAX_VIDEO_BYTES) {
+            controller.error(new Error("Media exceeds download limit"));
+            return;
+          }
+          controller.enqueue(chunk);
+        },
+      })
+    );
+
+    const headers = new Headers({
+      "Content-Disposition": `attachment; filename="${safeFilename(request.nextUrl.searchParams.get("filename"))}"`,
+      "Content-Type": contentType || "video/mp4",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
     });
+    if (contentLength > 0) headers.set("Content-Length", String(contentLength));
 
-    if (!videoResponse.ok) {
-      throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
-    }
-
-    // Get the video data as a ReadableStream
-    const videoStream = videoResponse.body;
-
-    if (!videoStream) {
-      throw new Error("Video stream is not available");
-    }
-
-    // Set headers to force download
-    const responseHeaders = new Headers();
-    responseHeaders.set(
-      "Content-Disposition",
-      `attachment; filename="${filename}"`
-    );
-
-    // Try to get Content-Type from original response, fallback to generic video type
-    responseHeaders.set(
-      "Content-Type",
-      videoResponse.headers.get("Content-Type") || "video/mp4"
-    );
-
-    // Optionally set Content-Length if available
-    if (videoResponse.headers.get("Content-Length")) {
-      responseHeaders.set(
-        "Content-Length",
-        videoResponse.headers.get("Content-Length")!
-      );
-    }
-
-    // Return the stream response
-    return new NextResponse(videoStream, {
-      status: 200,
-      headers: responseHeaders,
-    });
-  } catch (error: any) {
+    return new NextResponse(limitedStream, { status: 200, headers });
+  } catch (error) {
     console.error("Download proxy error:", error);
-    return NextResponse.json(
-      { error: "serverError", message: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "upstreamError" }, { status: 502 });
   }
 }
